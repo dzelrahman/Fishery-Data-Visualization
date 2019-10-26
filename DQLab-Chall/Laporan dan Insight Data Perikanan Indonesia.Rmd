@@ -1,0 +1,475 @@
+---
+title: "Laporan dan Insight Data Perikanan Indonesia"
+author: "[Faris Dzikrur Rahman](https://dzelrahman.wordpress.com/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "dzelrahman@gmail.com"
+linkedin: "faris-rahman-077a70172"
+twitter: "dzelrahman"
+home: "www.dzelrahman.com"
+output:
+  epuRate::epurate:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+
+
+<br><br>
+
+```{r, message=FALSE, warning=FALSE}
+library(devtools)
+install_github("holtzy/epuRate")
+library(epuRate)
+library(rmarkdown)
+library(tidyverse)
+library(lubridate)
+library(ggthemes)
+
+library(here)
+library(extrafont)
+library(ggforce)
+library(treemap)
+library(packcircles)
+library(viridis)
+library(plotly)
+library(mapview)
+
+source(here("custom_theme.R"))
+
+options(scipen = 999)
+extrafont::loadfonts()
+extrafont::font_import()
+extrafont::loadfonts(quiet=TRUE)
+```
+
+# Latar Belakang
+***
+Komoditas budidaya ikan merupakan salah satu industri terpenting, terutama di negara yang memiliki kekayaan laut dan menasbihkan dirinya sebagai negara maritim seperti Indonesia. Hal ini juga didukung oleh fokus pemerintah Indonesia terutama melalui Kementerian Perikanan dan Kelautan untuk membuat kebijakan-kebijakan yang dapat memaksimalkan potensi laut yang dimiliki oleh Indonesia. Untuk mendukung kebijakan-kebijakan tersebut, maka dibutuhkan data-data yang memadai.
+
+Karenanya pada laporan ini, penulis akan coba melakukan visualisasi terhadap data yang penulis dapatkan dan menggali insight-insight yang tersembunyi di dalam data tersebut, disertai dengan beberapa analisa yang akan menjelaskan visualisasi tersebut.
+
+# Read Data
+***
+```{r}
+konsumsi <- read.csv("data-perikanan-nasional/angkakonsumsiikan.csv")
+budidaya <- read.csv("data-perikanan-nasional/pembudidayaikannasional.csv")
+benih <- read.csv("data-perikanan-nasional/jumlahproduksibenih.csv")
+produk <- read.csv("data-perikanan-nasional/produkolahanikan.csv")
+prod_bud <- read.csv("data-perikanan-nasional/produksibudidayanasional.csv")
+prod_laku <- read.csv("data-perikanan-nasional/produksiperlakuanikannasional.csv")
+latlong <- read.csv("data-perikanan-nasional/daftar-nama-daerah.csv")
+```
+
+# Trend Konsumsi Ikan di Indonesia
+***
+Seiring tahun, dimulai dari tahun 2008, penyediaan ikan untuk konsumsi per kapita semakin mengalami peningkatan. Hal ini dapat disebabkan karena faktor berkembangnya teknologi menangkap ikan serta political will dari pemerintah untuk terus membuat peraturan dan policy yang dapat meningkatkan produksi komoditas ikan. Peningkatan ini juga disebabkan oleh berkembangnya cara-cara mengolah ikan yang dapat meningkatkan konsumsi ikan untuk masyarakat yang bertinggal di daerah yang jauh dari pesisir laut. Dapat dilihat pada grafik di bawah, meningkatnya penyediaan ikan untuk konsumsi juga turut dibarengi dengan konsumsi itu sendiri. 
+```{r}
+tes1 <- konsumsi %>% 
+  select(-ID, -Satuan) %>% 
+  group_by(ParamKonsumsiIkan, Tahun) %>% 
+  filter(ParamKonsumsiIkan == "Penyediaan ikan untuk konsumsi per kapita" | ParamKonsumsiIkan == "Konsumsi ikan per kapita")
+
+plot_kons <- tes1 %>% 
+  ggplot( aes(x=Tahun, y=Nilai, fill=ParamKonsumsiIkan, text=ParamKonsumsiIkan)) +
+    geom_area( ) +
+    scale_fill_viridis(discrete = TRUE) + 
+    theme(legend.position="none") + 
+    ggtitle("Perbandingan Ketersediaan dan Konsumsi Ikan") +
+    theme_minimal() +
+    theme(legend.position="bottom") +
+  labs(x="Tahun",
+       y="kg/kapita/tahun")
+
+plot_kons
+
+```
+
+```{r}
+tidy_budidaya <- budidaya %>% 
+  mutate_if(is.character,as.factor)
+```
+
+# Proporsi Budidaya Ikan di Tiap Provinsi di Indonesia
+***
+Meningkatnya ketersediaan ikan tentunya disebabkan salah satunya oleh hasil budidaya ikan yang menyebar di seluruh provinsi di Indonesia. Tampak dari grafik di bawah ini bahwa jumlah hasil budidaya masih didominasi oleh provinsi di Pulau Jawa, yaitu Jawa Barat, Jawa Tengah, dan Jawa Timur. Jawa Barat memiliki hasil budidaya yang jauh di atas, mencapai angka 8 juta volume. Dari grafik di bawah, nampak pula ada daerah-daerah yang masih rendah pengelolaan budidayanya seperti di tanah Papua, Kepulauan Bangka Belitung, Maluku Utara, dan bahkan DKI Jakarta. Hal ini tentunya dapat mempengaruhi konsumsi ikan masyarakat sekitar. Jikalau mengkonsumsi ikan, maka sudah melewati proses distribusi yang panjang, sehingga menyebabkan ikan menjadi kurang segar lagi. 
+```{r}
+arrange2 <- tidy_budidaya %>% 
+  select(-c(ID, ProvinsiID, BudidayaID, Budidaya)) %>% 
+  group_by(NamaProvinsi) %>% 
+  summarise(total=sum(Jumlah)) 
+
+ggplot(arrange2, aes(x= reorder(NamaProvinsi, total), y=total)) +
+  geom_bar(show.legend = F, stat = "identity") +
+  
+  coord_flip() +
+  
+
+  theme_economist(base_size = 10, base_family = "sans", horizontal = TRUE,
+  dkpanel = FALSE) +
+  
+  geom_text(aes(label=paste0(round(total,1))), position = position_dodge(width = .9), hjust = 'left', vjust = 'center', size = 2.5) +
+  ylab("Total Volume") +
+  xlab("Provinsi") +
+  
+  labs(
+    title = "Proporsi Budidaya Ikan Tiap Provinsi (2002-2012)",
+    subtitle = "Pulau Jawa mendominasi",
+    caption = "\n Source: Data Set Perikananan Nasional
+      Visualization: FarisRahman (Twitter @dzelrahman)")
+```
+<br><br>
+Mari kita cuplik pergerakan jumlah produksi dari budidaya 3 provinsi teratas dan 3 provinsi terbawah untuk mengetahui apakah produksi mengalami peningkatan atau malah mengalami penurunan dari 2008-2012. 
+```{r}
+plot_b <- tidy_budidaya %>% 
+  select(-ID, -ProvinsiID, -BudidayaID, -Budidaya) %>% 
+  group_by(Tahun, NamaProvinsi) %>% 
+  filter(NamaProvinsi == "Jawa Barat" | NamaProvinsi == "Jawa Tengah" | NamaProvinsi == "Jawa Timur")
+  
+```
+
+```{r}
+plot_b %>% 
+  ggplot( aes(x=as.factor(Tahun), y=Jumlah, group=NamaProvinsi, color=NamaProvinsi)) +
+    geom_line(size=1) +
+    scale_color_viridis(discrete = TRUE) +
+    ggtitle("Trend Jumlah Budidaya (2002-2012)") +
+    custom_theme() +
+    ylab("Volume Produksi")
+```
+<br><br>
+Dari grafik di atas, dapat dilihat bahwa ada trend kenaikan pada jumlah produksi budidaya di tiga provinsi teratas di Indonesia, terutama di daerah Jawa Barat. Menariknya, hasil budidaya di Jawa Barat sempat turun pada tahun 2011, namun menuju 2012, hasil budidaya meningkat secara drastis, melampaui Jawa Tengah dan Jawa Timur. Provinsi-provinsi lain dapat mengadopsi cara-cara yang dilakukan budidaya di Jawa Barat untuk meningkatkan hasil di masing-masing provinsi. 
+
+# Apa saja produk olahan ikan yang banyak dihasilkan?
+***
+Masing-masing wilayah di Indonesia memiliki caranya sendiri dalam mengolah ikan untuk dikonsumsi masyarakat. Dari data yang penulis terima, ada delapan cara untuk mengolah ikan di Indonesia, yaitu dengan cara membuatnya menjadi ikan asap, ikan kalengan, ikan pindang, ikan beku, ikan kering/asin, ikan peragian, tepung ikan, dan pengolahan dengan cara lain. Grafik di bawah ini menjelaskan mengenai total volume produksi dari masing-masing wilayah beserta jenis olahan yang dihasilkan.
+```{r}
+arrange3 <- produk %>% 
+  select(-c(ID, ProvinsiID, JenisPerairan, OlahanID)) %>% 
+  group_by(Wilayah, JenisOlahan) %>% 
+  filter(JenisOlahan != "semua") %>% 
+  summarise(tot_vol=sum(Volume))
+
+ggplot(arrange3, aes(Wilayah)) +
+  geom_bar(aes(y = tot_vol, fill = JenisOlahan),stat="identity") +
+  scale_fill_brewer(palette = "Set3") +
+  coord_flip() +
+  custom_theme()+
+  # theme(
+  #   panel.grid.minor.y = element_blank(),
+  #   panel.grid.major.y = element_blank(),
+  #   legend.position="bottom") +
+ 
+  ylab("Total Volume") +
+  xlab("Wilayah") +
+  
+  labs(
+    title = "Produk Olahan Ikan",
+    subtitle = "Total Volume Beserta Jenis Olahan",
+    caption = "\n Source: Data Set Perikananan Nasional
+      Visualization: FarisRahman (Twitter @dzelrahman)")
+```
+<br><br>
+Dari grafik di atas, dapat dilihat bahwa Maluku-Papua merupakan wilayah dengan jumlah produk olahan ikan di seluruh Indonesia. Uniknya, berbeda dengan wilayah lainnya, jenis produk olahan yang paling dominan di wilayah tersebut adalah ikan beku. Hal ini bisa jadi disebabkan karena wilayah ini yang berada di Timur Indonesia, yang sarat dengan minimnya distribusi/jauhnya distribusi dari pulau Jawa. Sehingga, salah satu cara untuk mengkonsumsi ikan yaitu dengan cara dibekukan untuk menjaga kualitas ikan. Dari grafik budidaya ikan sebelumnya, terlihat bahwa Maluku memiliki jumlah produk budidaya yang sangat minim dibandingkan daerah-daerah lain. Hal ini bisa dikatakan menjadi penyebab mengapa di daerah ini lebih banyak dihasilkan produk ikan beku. Di daerah lain, produk olahan ikan yang dominan adalah dengan membuatnya menjadi ikan kering/ikan asin. 
+
+Hal yang menarik adalah meskipun jumlah hasil budidaya Maluku-Papua adalah salah satu yang terkecil di Indonesia, namun wilayah ini merupakan wilayah dengan produk olahan ikan terbanyak di Indonesia, bahkan melampaui wilayah Jawa. Wilayah dengan produk olahan terkecil adalah dari wilayah Bali dan Nusa Tenggara. 
+
+Dari grafik di bawah, dapat dilihat bahwa pergerakan produk olahan ikan terutama di Pulau Jawa bergerak cukup stabil. Ikan beku sedikit mengalami trend kenaikan, dan bukan tidak mungkin di tahun setelah 2012, ikan beku menjadi salah satu produk terbanyak, seperti pada wilayah Maluku dan Papua.
+```{r}
+arrange4 <- produk %>% 
+  select(-c(ID, ProvinsiID, JenisPerairan, OlahanID)) %>% 
+  group_by(JenisOlahan, Wilayah, Tahun) %>% 
+  filter(Wilayah=="Jawa", JenisOlahan != "semua") %>% 
+  summarise(tot_vol=sum(Volume))
+
+ggplot(arrange4, aes(x = Tahun, y = tot_vol,
+                  group = JenisOlahan,
+                  color = JenisOlahan)) +
+  # geom_mark_circle(aes(label = "First game released",
+  #                      filter = developer == "Ubisoft Montreal" & nth_game == 1),
+  #                  expand = unit(3, "mm"), label.fill = "#f5f5f2", label.fontsize = 10) +
+  #   geom_mark_circle(aes(label = "Last game",
+  #                      filter = developer == "Team17 Digital Ltd" & nth_game == 10),
+  #                  expand = unit(3, "mm"),label.fill = "#f5f5f2", label.fontsize = 10) +
+              geom_line(size = 1) +
+              facet_wrap(~JenisOlahan) +
+              custom_theme() +
+  labs(title = "Pergerakan Volume per Tahun tiap Produk Olahan",
+       subtitle = "Wilayah Jawa\n",
+       caption = "Data: Ikan | Vis: @dzelrahman")
+```
+<br><br>
+Grafik berikut ini hanya ingin menggambarkan proporsi produk olahan ikan, dalam kasus ini wilayah Jawa dengan grafik yang berbeda, yaitu menggunakan treemap.
+```{r}
+treemap(arrange4 %>% group_by(Wilayah,JenisOlahan, tot_vol),
+        index = c("Wilayah","JenisOlahan"),
+        vSize = "tot_vol",type = "index",
+        fontsize.labels = c(20,14,10),
+        border.lwds = c(6,4,1),
+        align.labels = list(c("center","top"),c("left","bottom"),c("right","center")),
+        palette = "RdYlBu",
+        title = "Proporsi Jenis Olahan")
+
+```
+<br><br>
+Grafik di bawah menggambarkan bagaimana pergerakan volume jenis olahan ikan di pulau Jawa di tiap tahunnya. Ada 3 produk yang dominan yaitu ikan kering/asin, ikan pindang, dan ikan beku. 
+```{r}
+ggplot(arrange4,
+             aes(x = as.factor(Tahun), y = JenisOlahan)) +
+  geom_tile(aes(fill = tot_vol)) +
+  scale_fill_viridis_c("Frequency", option = "magma", direction = -1) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_discrete(expand = c(0, 0)) +
+  labs(
+    x = "Tahun",
+    y = "Jenis Olahan",
+    title = "Pergerakan Volume Jenis Olahan Ikan Tiap Tahun Pulau Jawa",
+    subtitle = "Semua jenis olahan bergerak relatif stabil",
+    caption = "@dzelrahman (Faris D. Rahman)"
+  ) +
+  theme_minimal()
+```
+<br><br>
+Bagaimana proporsi jenis olahan ikan di seluruh Indonesia? Dari grafik di bawah ini, produk ikan beku dan ikan asin/kering sangatlah dominan dibandingkan produk-produk lainnya. Hal ini juga menunjukkan preferensi masyarakat Indonesia yang memilih mengkonsumsi ikan asli yang dibekukan, dan kalau harus memilih produk olahan, maka ikan asin/kering menjadi pilihan utama. 
+```{r fig.width=12, fig.height=4}
+arrange5 <- produk %>% 
+  select(-c(ID, ProvinsiID, JenisPerairan, OlahanID)) %>% 
+  group_by(JenisOlahan, Wilayah, Tahun) %>% 
+  filter(JenisOlahan != "semua") %>% 
+  summarise(tot_vol=sum(Volume))
+
+arrange5$id <- seq(1, nrow(arrange5))
+angle <-  90 - (360 * (arrange5$id - 0.5) / nrow(arrange5))
+arrange5$hjust <- as.numeric(angle < -90)
+arrange5$angle <- angle
+
+ggplot(arrange5,
+       aes(x = JenisOlahan, y = tot_vol)) +
+  geom_segment(aes(x = JenisOlahan, xend = JenisOlahan,
+                   y = 0, yend = 375),
+               color = "lightgrey", size = .25,
+               linetype = "dashed") +
+  geom_col(aes(fill = JenisOlahan), width = 1) +
+  
+  coord_polar(start = 0)+
+  
+  labs(
+    x = "",
+    y = "",
+    title = "Frekuensi Volume Jenis Olahan di Indonesia",
+    subtitle = "Grafik 360 derajat",
+    caption = "@dzelrahman (Faris D. Rahman)"
+  ) +
+  scale_fill_viridis_d(option = "viridis") +
+  custom_theme() 
+  
+```
+<br><br>
+# Ikan jenis apa saja yang dibudidayakan?
+***
+Masing-masing daerah memiliki kekhasan masing-masing dalam memilih apa yang menjadi objek budidaya, namun budidaya rumput laut merupakan objek yang menonjol di antara jenis-jenis ikan lainnya. Seperti yang dapat dilihat pada proporsi budidaya di bawah, rumput laut jauh mendominasi, diikuti segala jenis udang-udangan. 
+```{r}
+arrange6 <- prod_bud %>% 
+  select(-c(ID, ProvinsiID, Budidaya, IkanID, Nilai)) %>% 
+  group_by(NamaProvinsi, NamaIkan) %>% 
+  filter(NamaIkan == "bandeng"|NamaIkan == "gurame"|NamaIkan == "kakap"|NamaIkan == "kekerangan"|
+           NamaIkan =="kepiting"|NamaIkan=="kerapu"|NamaIkan=="lele"|NamaIkan =="mas"|NamaIkan =="nila"|NamaIkan =="patin"|
+           NamaIkan =="rumput laut"|
+           NamaIkan =="udang total", Volume > 0) %>% 
+  summarise(tot_vol=sum(Volume))
+
+ggplot(arrange6, aes(x= reorder(NamaIkan, tot_vol), y=tot_vol)) +
+  geom_bar(show.legend = F, stat = "identity") +
+  
+  coord_flip() +
+  
+  custom_theme()+
+   
+  labs(
+    title = "Budidaya Hewan Laut di Indonesia",
+    subtitle = "Proporsi Budidaya di Indonesia",
+    caption = "\n Source: Data Set Ikan
+      Visualization: FarisRahman (Twitter @dzelrahman)")
+```
+<br><br>
+Grafik di bawah menunjukkan proporsi jenis hewan budidaya yang populer di masing-masing provinsi. Nampak bahwa rumput laut menjadi pilihan utama di hampir semua provinsi kecuali Jawa Barat, Jawa Tengah, daerah Sumatra, dan Kalimantan. Di daerah seperti Jawa Barat, jenis ikan mas dan ikan nila lebih disukai sebagai objek budidaya. 
+```{r}
+ggplot(arrange6, aes(NamaProvinsi)) +
+  geom_bar(aes(y = tot_vol, fill = NamaIkan),stat="identity") +
+  scale_fill_brewer(palette = "Paired") +
+  coord_flip() +
+  theme_clean() +
+  # theme(
+  #   panel.grid.minor.y = element_blank(),
+  #   panel.grid.major.y = element_blank(),
+  #   legend.position="bottom") +
+ 
+  ylab("Volume") +
+  xlab("Provinsi") +
+  
+  labs(
+    title = "Budidaya Hewan Laut",
+    subtitle = "Proporsi tipe ikan tiap provinsi",
+    caption = "\n Source: Data Set Ikan
+      Visualization: FarisRahman (Twitter @dzelrahman)")
+```
+<br><br>
+Mari kita cuplik daerah Jawa Barat dan lihat trend kenaikan budidaya ikan mas, ikan nila, dan ikan lele sebagai salah satu objek budidaya terpopuler disana. Seperti dapat kita lihat pada grafik heatmap di bawah, semakin tahun, jumlah volume ikan mas, ikan nila, dan ikan lele semakin meningkat. 
+```{r}
+arrange7 <- prod_bud %>% 
+  select(-c(ID, ProvinsiID, Budidaya, IkanID, Nilai)) %>% 
+  group_by(NamaIkan, NamaProvinsi, Tahun) %>% 
+  filter(NamaIkan == "nila" | NamaIkan == "mas" | NamaIkan == "lele", NamaProvinsi == c("Jawa Barat")) %>% 
+  summarise(tot_vol=sum(Volume))
+
+ggplot(arrange7,
+             aes(x = as.factor(Tahun), y = NamaIkan)) +
+  geom_tile(aes(fill = tot_vol)) +
+  scale_fill_viridis_c("Frequency", option = "magma", direction = -1) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_discrete(expand = c(0, 0)) +
+  labs(
+    x = "Tahun",
+    y = "Jenis Olahan",
+    title = "Pergerakan Volume Jenis Budidaya Hewan Laut di Jawa Barat",
+    subtitle = "Mas dan bandeng semakin populer di Jawa Barat",
+    caption = "@dzelrahman (Faris D. Rahman)"
+  ) +
+  theme_minimal()
+```
+<br><br>
+Grafik ini merupakan gambaran proporsi budidaya hewan laut di seluruh Indonesia, namun dengan tipe grafik yang berbeda.
+```{r}
+arrange8 <- prod_bud %>% 
+  select(-c(ID, ProvinsiID, Budidaya, IkanID, Nilai)) %>% 
+  group_by(NamaIkan, NamaProvinsi, Tahun) %>% 
+   filter(NamaIkan == "bandeng"|NamaIkan == "gurame"|NamaIkan == "kakap"|NamaIkan == "kekerangan"|
+           NamaIkan =="kepiting"|NamaIkan=="kerapu"|NamaIkan=="lele"|NamaIkan =="mas"|NamaIkan =="nila"|NamaIkan =="patin"|
+           NamaIkan =="rumput laut"|
+           NamaIkan =="udang total", Volume > 0) %>% 
+  summarise(tot_vol=sum(Volume))
+
+arrange8$id <- seq(1, nrow(arrange8))
+angle <-  90 - (360 * (arrange8$id - 0.5) / nrow(arrange8))
+arrange8$hjust <- as.numeric(angle < -90)
+arrange8$angle <- angle
+
+ggplot(arrange8,
+       aes(x = NamaIkan, y = tot_vol)) +
+  geom_segment(aes(x = NamaIkan, xend = NamaIkan,
+                   y = 0, yend = 375),
+               color = "lightgrey", size = .25,
+               linetype = "dashed") +
+  geom_col(aes(fill = NamaIkan), width = 1) +
+  
+  coord_polar(start = 0)+
+  
+  labs(
+    x = "",
+    y = "",
+    title = "Frekuensi Volume Jenis Olahan di Indonesia",
+    subtitle = "Rumput laut mendominasi",
+    caption = "@dzelrahman (Faris D. Rahman)"
+  ) +
+  scale_fill_viridis_d(option = "viridis") +
+  custom_theme()
+
+  
+```
+<br><br>
+# Provinsi manakah yang menyumbang nilai penjualan ikan terbesar di Indonesia dan bagaimana proporsinya?
+***
+Dari peta di bawah, dapat dilihat gambaran persebaran nilai penjualan ikan di seluruh Indonesia. Seperti diprediksi, Jawa Barat menjadi provinsi sebagai penyumbang terbesar nilai penjualan ikan di Indonesia. Masih ada beberapa provinsi di wilayah Kalimantan, Papua, dan Maluku yang masih minim nilai penjualan ikannya. Tapi, pada umumnya nilai penjualan ini sudah merata di seluruh Indonesia.
+```{r}
+names(latlong)[4] <- "ProvinsiID"
+names(latlong)
+latlong
+
+latlong_merge <- latlong %>% 
+  select(-nid, -parent_nid, -name, -type, -status)
+
+prod_bud_longlat <- inner_join(prod_bud, latlong_merge, by = "ProvinsiID")
+
+# write.csv(prod_bud_longlat, "prod_bud_longlat.csv")
+
+world <- map_data("world", "indonesia")
+
+plot_longlat <- prod_bud_longlat %>% 
+  select(-ID, -Budidaya, -Tahun, -Volume, -IkanID) %>% 
+  group_by(latitude, longitude) %>% 
+  summarise(tot_rev=sum(Nilai))
+  
+plot_longlat %>% 
+  ggplot() +
+    geom_polygon(data = world, aes(x=long, y = lat, group = group), fill="red", alpha=0.4) +
+    geom_point(aes(x=longitude, y=latitude, size=tot_rev, color="purple"), alpha=0.7) +
+    scale_color_viridis(discrete=TRUE, guide=FALSE) +
+  scale_size_continuous(range=c(3,8)) +
+    coord_equal() +
+    theme_void() +
+    theme(
+        panel.spacing=unit(c(0,0,0,0), "null"),
+        plot.margin=grid::unit(c(0,0,0,0), "cm"),
+        legend.position="bottom",
+        legend.direction="horizontal"
+    ) +
+  labs(
+    x = "",
+    y = "",
+    title = "Proporsi Nilai Penjualan Ikan di Seluruh Indonesia",
+    subtitle = "Pulau Jawa dan Sumatra penyumbang terbesar",
+    caption = "@dzelrahman (Faris D. Rahman)"
+  ) 
+  
+```
+<br><br>
+# Bagaimana jenis perlakuan dan cara ikan dipasarkan di masing-masing daerah di Indonesia?
+***
+Ikan tidak hanya dipasarkan secara langsung dan segar di pasar-pasar, namun tiap daerah memiliki cara-cara tertentu di dalam memasarkan ikan. Cara itu termasuk dibekukan, dipindang, dikalengkan, diasapkan, dikeringkan, diragikan, dan dijadikan tepung ikan. Seperti yang terlihat pada grafik di bawah, pada umumnya setiap daerah lebih banyak memasarkan ikannya secara langsung, bahkan di wilayah Sulawesi dan Sumatra hampir 100% perlakuan ikan dengan cara dipasarkan segar langsung di pasar-pasar. Namun, seperti mengkonfirmasi apa yang telah dijelaskan di atas, wilayah Maluku-Papua lebih banyak memasarkan ikannya dengan cara dibekukan. Meskipun proporsi ikan segarnya juga cukup besar, namun bisa jadi dikarenakan berada di Indonesia bagian Timur, ikan lebih banyak diperlakukan dengan cara dibekukan. 
+```{r}
+ml <- prod_laku %>% 
+  group_by(Wilayah, JenisPerlakuan) %>% 
+  filter(JenisPerlakuan == "dipasarkan segar" | JenisPerlakuan == "pembekuan" | JenisPerlakuan == "pemindangan" | JenisPerlakuan == "pengalengan" | JenisPerlakuan == "pengasapan" | JenisPerlakuan == "pengeringan/penggaraman" | JenisPerlakuan == "peragian" | JenisPerlakuan == "tepung ikan") %>% 
+  summarise(tot_vol=sum(Volume)) %>% 
+  mutate(volume_perc = round(tot_vol/sum(tot_vol)*100,1)) %>% 
+  mutate(order=row_number())
+
+ml %>%
+  ungroup() %>% 
+ggplot() +
+  geom_col(aes(x = order,
+               y = volume_perc,
+               fill = JenisPerlakuan)
+           ) +
+  facet_wrap(~Wilayah, ncol=3) +
+  scale_x_reverse() +
+  scale_fill_brewer(palette = "Dark2") +
+  coord_polar(theta = "y") +
+  labs(
+    title = "Jenis Perlakuan Budidaya Ikan Tiap Wilayah",
+    subtitle = "Different volume as percentage of the total volume.\nThe outer ring shows the largest volume (full circle is 100%)",
+    caption = "Source: Data Ikan | Graphic: Faris D. Rahman"
+  ) +
+  theme_void()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
